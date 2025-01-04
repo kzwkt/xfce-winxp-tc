@@ -44,6 +44,8 @@ add_library(
     public/dialog.h
     src/error.c
     public/error.h
+    src/fsclipbd.c
+    public/fsclipbd.h
     src/icnvwbeh.c
     public/icnvwbeh.h
     src/resources.c
