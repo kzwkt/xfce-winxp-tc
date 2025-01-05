@@ -5,8 +5,27 @@
 #include "../public/fsclipbd.h"
 
 //
+// PRIVATE ENUMS
+//
+enum
+{
+    PROP_CAN_PASTE = 1
+};
+
+//
 // FORWARD DECLARATIONS
 //
+static void wintc_sh_fs_clipboard_get_property(
+    GObject*    object,
+    guint       prop_id,
+    GValue*     value,
+    GParamSpec* pspec
+);
+
+static void wintc_sh_fs_clipboard_update_state(
+    WinTCShFSClipboard* fs_clipboard
+);
+
 static void on_clipboard_owner_change(
     GtkClipboard*        self,
     GdkEventOwnerChange* event,
@@ -21,6 +40,7 @@ typedef struct _WinTCShFSClipboard
     GObject __parent__;
 
     GtkClipboard* clipboard;
+    gboolean      has_content;
 } WinTCShFSClipboard;
 
 //
@@ -33,8 +53,25 @@ G_DEFINE_TYPE(
 )
 
 static void wintc_sh_fs_clipboard_class_init(
-    WINTC_UNUSED(WinTCShFSClipboardClass* klass)
-) {}
+    WinTCShFSClipboardClass* klass
+)
+{
+    GObjectClass* object_class = G_OBJECT_CLASS(klass);
+
+    object_class->get_property = wintc_sh_fs_clipboard_get_property;
+
+    g_object_class_install_property(
+        object_class,
+        PROP_CAN_PASTE,
+        g_param_spec_boolean(
+            "can-paste",
+            "CanPaste",
+            "Determines whether the clipboard has pastable content.",
+            FALSE,
+            G_PARAM_READABLE
+        )
+    );
+}
 
 static void wintc_sh_fs_clipboard_init(
     WinTCShFSClipboard* self
@@ -45,12 +82,38 @@ static void wintc_sh_fs_clipboard_init(
     self->clipboard =
         gtk_clipboard_get_default(gdk_display_get_default());
 
+    wintc_sh_fs_clipboard_update_state(self);
+
     g_signal_connect(
         self->clipboard,
         "owner-change",
         G_CALLBACK(on_clipboard_owner_change),
         self
     );
+}
+
+//
+// CLASS VIRTUAL METHODS
+//
+static void wintc_sh_fs_clipboard_get_property(
+    GObject*    object,
+    guint       prop_id,
+    GValue*     value,
+    GParamSpec* pspec
+)
+{
+    WinTCShFSClipboard* fs_clipboard = WINTC_SH_FS_CLIPBOARD(object);
+
+    switch (prop_id)
+    {
+        case PROP_CAN_PASTE:
+            g_value_set_boolean(value, fs_clipboard->has_content);
+            break;
+
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+            break;
+    }
 }
 
 //
@@ -84,13 +147,38 @@ WinTCShFSClipboard* wintc_sh_fs_clipboard_new(void)
 }
 
 //
+// PRIVATE FUNCTIONS
+//
+static void wintc_sh_fs_clipboard_update_state(
+    WinTCShFSClipboard* fs_clipboard
+)
+{
+    fs_clipboard->has_content =
+        gtk_clipboard_wait_is_uris_available(fs_clipboard->clipboard);
+
+    g_object_notify(
+        G_OBJECT(fs_clipboard),
+        "can-paste"
+    );
+
+    WINTC_LOG_DEBUG(
+        "shell: fsclipbd - has data: %d",
+        fs_clipboard->has_content
+    );
+}
+
+//
 // CALLBACKS
 //
 static void on_clipboard_owner_change(
-    WINTC_UNUSED(GtkClipboard*        self),
+    WINTC_UNUSED(GtkClipboard* self),
     WINTC_UNUSED(GdkEventOwnerChange* event),
-    WINTC_UNUSED(gpointer             user_data)
+    gpointer user_data
 )
 {
-    WINTC_LOG_DEBUG("Clipboard owner changed.");
+    WINTC_LOG_DEBUG("shell: fsclipbd - owner changed");
+
+    wintc_sh_fs_clipboard_update_state(
+        WINTC_SH_FS_CLIPBOARD(user_data)
+    );
 }
