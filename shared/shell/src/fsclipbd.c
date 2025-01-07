@@ -2,6 +2,7 @@
 #include <glib.h>
 #include <wintc/comgtk.h>
 
+#include "../public/error.h"
 #include "../public/fsclipbd.h"
 
 //
@@ -144,6 +145,37 @@ WinTCShFSClipboard* wintc_sh_fs_clipboard_new(void)
     g_object_ref(singleton_clipboard);
 
     return singleton_clipboard;
+}
+
+gboolean wintc_sh_fs_clipboard_paste(
+    WinTCShFSClipboard* fs_clipboard,
+    WINTC_UNUSED(const gchar* dest),
+    GError**            error
+)
+{
+    gchar** uris = gtk_clipboard_wait_for_uris(fs_clipboard->clipboard);
+
+    if (!uris)
+    {
+        g_set_error(
+            error,
+            wintc_shell_error_quark(),
+            WINTC_SHELL_ERROR_CLIPBOARD_EMPTY,
+            "%s",
+            "There are no files on the clipboard." // FIXME: Localise
+        );
+
+        return FALSE;
+    }
+
+    // Attempt to paste these files
+    //
+    for (gchar** iter = uris; *iter != NULL; iter++)
+    {
+        WINTC_LOG_DEBUG(*iter);
+    }
+
+    return TRUE;
 }
 
 //

@@ -105,6 +105,12 @@ static gboolean shopr_open(
     GtkWindow*           wnd,
     GError**             error
 );
+static gboolean shopr_paste(
+    WinTCIShextView*     view,
+    WinTCShextOperation* operation,
+    GtkWindow*           wnd,
+    GError**             error
+);
 
 static void on_file_monitor_changed(
     GFileMonitor*     self,
@@ -640,12 +646,6 @@ static WinTCShextOperation* wintc_sh_view_fs_spawn_operation(
     WINTC_UNUSED(GError**         error)
 )
 {
-    if (operation_id > WINTC_SHEXT_KNOWN_OP_OPEN)
-    {
-        g_critical("Not implemented %s", __func__);
-        return NULL;
-    }
-
     // Spawn op
     //
     WinTCShextOperation* ret = g_new(WinTCShextOperation, 1);
@@ -655,6 +655,10 @@ static WinTCShextOperation* wintc_sh_view_fs_spawn_operation(
         case WINTC_SHEXT_KNOWN_OP_OPEN:
             ret->func = shopr_open;
             ret->priv = targets;
+            break;
+
+        case WINTC_SHEXT_KNOWN_OP_PASTE:
+            ret->func = shopr_paste;
             break;
 
         default:
@@ -823,6 +827,22 @@ static gboolean shopr_open(
     g_list_free(targets);
 
     return success;
+}
+
+static gboolean shopr_paste(
+    WinTCIShextView*     view,
+    WINTC_UNUSED(WinTCShextOperation* operation),
+    WINTC_UNUSED(GtkWindow*           wnd),
+    GError**             error
+)
+{
+    WinTCShViewFS* view_fs = WINTC_SH_VIEW_FS(view);
+
+    return wintc_sh_fs_clipboard_paste(
+        view_fs->fs_clipboard,
+        view_fs->path,
+        error
+    );
 }
 
 static void on_file_monitor_changed(

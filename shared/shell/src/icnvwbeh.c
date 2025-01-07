@@ -455,11 +455,23 @@ static void wintc_sh_icon_view_behaviour_update_view(
 //
 static void action_paste_operation(
     WINTC_UNUSED(GSimpleAction* action),
-    WINTC_UNUSED(GVariant*      parameter),
-    WINTC_UNUSED(gpointer       user_data)
+    GVariant* parameter,
+    gpointer  user_data
 )
 {
-    WINTC_LOG_DEBUG("Should paste now!");
+    WinTCShIconViewBehaviour* behaviour =
+        WINTC_SH_ICON_VIEW_BEHAVIOUR(user_data);
+
+    // Forward to normal view op
+    //
+    g_action_group_activate_action(
+        gtk_widget_get_action_group(
+            behaviour->icon_view,
+            "control"
+        ),
+        "view-op",
+        parameter
+    );
 }
 
 static void action_view_operation(

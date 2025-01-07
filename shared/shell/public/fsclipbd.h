@@ -21,4 +21,10 @@ G_DECLARE_FINAL_TYPE(
 //
 WinTCShFSClipboard* wintc_sh_fs_clipboard_new(void);
 
+gboolean wintc_sh_fs_clipboard_paste(
+    WinTCShFSClipboard* fs_clipboard,
+    const gchar*        dest,
+    GError**            error
+);
+
 #endif
