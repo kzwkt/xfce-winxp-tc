@@ -34,6 +34,12 @@ static void on_clipboard_owner_change(
 );
 
 //
+// STATIC DATA
+//
+static GdkAtom S_ATOM_TEXT_URI_LIST;
+static GdkAtom S_ATOM_X_SPECIAL_GNOME_COPIED_FILES;
+
+//
 // GTK OOP CLASS/INSTANCE DEFINITIONS
 //
 typedef struct _WinTCShFSClipboard
@@ -41,7 +47,7 @@ typedef struct _WinTCShFSClipboard
     GObject __parent__;
 
     GtkClipboard* clipboard;
-    gboolean      has_content;
+    GdkAtom       preferred_target;
 } WinTCShFSClipboard;
 
 //
@@ -72,6 +78,11 @@ static void wintc_sh_fs_clipboard_class_init(
             G_PARAM_READABLE
         )
     );
+
+    S_ATOM_TEXT_URI_LIST =
+        gdk_atom_intern_static_string("text/uri-list");
+    S_ATOM_X_SPECIAL_GNOME_COPIED_FILES =
+        gdk_atom_intern_static_string("x-special/gnome-copied-files");
 }
 
 static void wintc_sh_fs_clipboard_init(
@@ -108,7 +119,10 @@ static void wintc_sh_fs_clipboard_get_property(
     switch (prop_id)
     {
         case PROP_CAN_PASTE:
-            g_value_set_boolean(value, fs_clipboard->has_content);
+            g_value_set_boolean(
+                value,
+                fs_clipboard->preferred_target != GDK_NONE
+            );
             break;
 
         default:
@@ -153,9 +167,7 @@ gboolean wintc_sh_fs_clipboard_paste(
     GError**            error
 )
 {
-    gchar** uris = gtk_clipboard_wait_for_uris(fs_clipboard->clipboard);
-
-    if (!uris)
+    if (fs_clipboard->preferred_target == GDK_NONE)
     {
         g_set_error(
             error,
@@ -168,12 +180,108 @@ gboolean wintc_sh_fs_clipboard_paste(
         return FALSE;
     }
 
+    // Retrieve the contents on the clipboard
+    //
+    GtkSelectionData* selection_data =
+        gtk_clipboard_wait_for_contents(
+            fs_clipboard->clipboard,
+            fs_clipboard->preferred_target
+        );
+
+    if (!selection_data)
+    {
+        g_set_error(
+            error,
+            wintc_shell_error_quark(),
+            WINTC_SHELL_ERROR_CLIPBOARD_GET_FAILED,
+            "%s",
+            "Failed to retrieve data on the clipboard." // FIXME: Localise
+        );
+
+        return FALSE;
+    }
+
+    // Parse the contents
+    //
+    const guchar* data;
+    const guchar* data_end;
+    gint          len         = 0;
+    gboolean      should_copy = TRUE;
+    GList*        uris        = NULL;
+
+    data =
+        gtk_selection_data_get_data_with_length(
+            selection_data,
+            &len
+        );
+
+    data_end = data + len;
+
+    if (fs_clipboard->preferred_target == S_ATOM_X_SPECIAL_GNOME_COPIED_FILES)
+    {
+        if (g_ascii_strncasecmp((const gchar*) data, "copy\n", 5) == 0)
+        {
+            should_copy = TRUE;
+            data += 5;
+        }
+        else if (g_ascii_strncasecmp((const gchar*) data, "cut\n", 4) == 0)
+        {
+            should_copy = FALSE;
+            data += 4;
+        }
+    }
+
+    while (data < data_end)
+    {
+        // Search for next \n
+        //
+        const guchar* next_lf = memchr(data, '\n', data_end - data);
+
+        if (!next_lf) // gnome-copied-files has no final \n
+        {
+            next_lf =  data_end;
+        }
+
+        // Work out how much we need to slice
+        //
+        gint copy_len = next_lf - data;
+
+        if (fs_clipboard->preferred_target == S_ATOM_TEXT_URI_LIST)
+        {
+            copy_len--; // text/uri-list uses \r\n rather than just \n
+        }
+
+        // Slice and store the URI in our list
+        //
+        gchar* buf = g_malloc(copy_len);
+
+        memcpy(buf, data, copy_len);
+
+        uris = g_list_append(uris, buf);
+
+        // Iter
+        //
+        data = next_lf + 1;
+    }
+
     // Attempt to paste these files
     //
-    for (gchar** iter = uris; *iter != NULL; iter++)
+    for (GList* iter = uris; iter; iter = iter->next)
     {
-        WINTC_LOG_DEBUG(*iter);
+        if (should_copy)
+        {
+            WINTC_LOG_DEBUG("Would copy the following...");
+        }
+        else
+        {
+            WINTC_LOG_DEBUG("Would move the following...");
+        }
+
+        WINTC_LOG_DEBUG(iter->data);
     }
+
+    g_list_free_full(uris, (GDestroyNotify) g_free);
+    gtk_selection_data_free(selection_data);
 
     return TRUE;
 }
@@ -185,17 +293,44 @@ static void wintc_sh_fs_clipboard_update_state(
     WinTCShFSClipboard* fs_clipboard
 )
 {
-    fs_clipboard->has_content =
-        gtk_clipboard_wait_is_uris_available(fs_clipboard->clipboard);
+    fs_clipboard->preferred_target = GDK_NONE;
+
+    if (
+        gtk_clipboard_wait_is_target_available(
+            fs_clipboard->clipboard,
+            S_ATOM_X_SPECIAL_GNOME_COPIED_FILES
+        )
+    )
+    {
+        fs_clipboard->preferred_target = S_ATOM_X_SPECIAL_GNOME_COPIED_FILES;
+
+        WINTC_LOG_DEBUG(
+            "shell: fsclipbd - has data: x-special/gnome-copied-files"
+        );
+    }
+    else if (
+        gtk_clipboard_wait_is_target_available(
+            fs_clipboard->clipboard,
+            S_ATOM_TEXT_URI_LIST
+        )
+    )
+    {
+        fs_clipboard->preferred_target = S_ATOM_TEXT_URI_LIST;
+
+        WINTC_LOG_DEBUG(
+            "shell: fsclipbd - has data: text/uri-list"
+        );
+    }
+    else
+    {
+        WINTC_LOG_DEBUG(
+            "shell: fsclipbd - has data: no"
+        );
+    }
 
     g_object_notify(
         G_OBJECT(fs_clipboard),
         "can-paste"
-    );
-
-    WINTC_LOG_DEBUG(
-        "shell: fsclipbd - has data: %d",
-        fs_clipboard->has_content
     );
 }
 
