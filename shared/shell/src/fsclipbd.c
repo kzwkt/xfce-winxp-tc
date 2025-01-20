@@ -1,9 +1,11 @@
 #include <gdk/gdk.h>
 #include <glib.h>
+#include <gtk/gtk.h>
 #include <wintc/comgtk.h>
 
 #include "../public/error.h"
 #include "../public/fsclipbd.h"
+#include "../public/fsop.h"
 
 //
 // PRIVATE ENUMS
@@ -164,6 +166,7 @@ WinTCShFSClipboard* wintc_sh_fs_clipboard_new(void)
 gboolean wintc_sh_fs_clipboard_paste(
     WinTCShFSClipboard* fs_clipboard,
     WINTC_UNUSED(const gchar* dest),
+    GtkWindow*          wnd,
     GError**            error
 )
 {
@@ -266,19 +269,19 @@ gboolean wintc_sh_fs_clipboard_paste(
 
     // Attempt to paste these files
     //
-    for (GList* iter = uris; iter; iter = iter->next)
-    {
-        if (should_copy)
-        {
-            WINTC_LOG_DEBUG("Would copy the following...");
-        }
-        else
-        {
-            WINTC_LOG_DEBUG("Would move the following...");
-        }
+    WinTCShFSOperation* fs_operation =
+        wintc_sh_fs_operation_new(
+            uris,
+            dest,
+            should_copy ?
+                WINTC_SH_FS_OPERATION_COPY :
+                WINTC_SH_FS_OPERATION_MOVE
+        );
 
-        WINTC_LOG_DEBUG(iter->data);
-    }
+    wintc_sh_fs_operation_do(
+        fs_operation,
+        wnd
+    );
 
     g_list_free_full(uris, (GDestroyNotify) g_free);
     gtk_selection_data_free(selection_data);

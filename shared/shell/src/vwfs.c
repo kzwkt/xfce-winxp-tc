@@ -832,7 +832,7 @@ static gboolean shopr_open(
 static gboolean shopr_paste(
     WinTCIShextView*     view,
     WINTC_UNUSED(WinTCShextOperation* operation),
-    WINTC_UNUSED(GtkWindow*           wnd),
+    GtkWindow*           wnd,
     GError**             error
 )
 {
@@ -841,6 +841,7 @@ static gboolean shopr_paste(
     return wintc_sh_fs_clipboard_paste(
         view_fs->fs_clipboard,
         view_fs->path,
+        wnd,
         error
     );
 }

@@ -46,6 +46,8 @@ add_library(
     public/error.h
     src/fsclipbd.c
     public/fsclipbd.h
+    src/fsop.c
+    public/fsop.h
     src/icnvwbeh.c
     public/icnvwbeh.h
     src/resources.c
