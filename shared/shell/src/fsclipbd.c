@@ -256,9 +256,10 @@ gboolean wintc_sh_fs_clipboard_paste(
 
         // Slice and store the URI in our list
         //
-        gchar* buf = g_malloc(copy_len);
+        gchar* buf = g_malloc(copy_len + 1);
 
         memcpy(buf, data, copy_len);
+        buf[copy_len] = 0;
 
         uris = g_list_append(uris, buf);
 
@@ -283,7 +284,8 @@ gboolean wintc_sh_fs_clipboard_paste(
         wnd
     );
 
-    g_list_free_full(uris, (GDestroyNotify) g_free);
+    // FIXME: Attach to signal for file copy completion to clean up
+    //g_list_free_full(uris, (GDestroyNotify) g_free);
     gtk_selection_data_free(selection_data);
 
     return TRUE;
