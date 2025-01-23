@@ -29,6 +29,18 @@ static void wintc_sh_fs_clipboard_update_state(
     WinTCShFSClipboard* fs_clipboard
 );
 
+static void cb_clipboard_contents_received(
+    GtkClipboard*     clipboard,
+    GtkSelectionData* selection_data,
+    gpointer          user_data
+);
+static void cb_clipboard_targets_received(
+    GtkClipboard* clipboard,
+    GdkAtom*      atoms,
+    gint          n_atoms,
+    gpointer      user_data
+);
+
 static void on_clipboard_owner_change(
     GtkClipboard*        self,
     GdkEventOwnerChange* event,
@@ -48,8 +60,10 @@ typedef struct _WinTCShFSClipboard
 {
     GObject __parent__;
 
-    GtkClipboard* clipboard;
-    GdkAtom       preferred_target;
+    GtkClipboard*          clipboard;
+    GList*                 list_uris;
+    WinTCShFSOperationKind operation_kind;
+    GdkAtom                preferred_target;
 } WinTCShFSClipboard;
 
 //
@@ -91,7 +105,7 @@ static void wintc_sh_fs_clipboard_init(
     WinTCShFSClipboard* self
 )
 {
-    WINTC_LOG_DEBUG("Creating clipboard.");
+    WINTC_LOG_DEBUG("shell: fs clipbd - creating clipboard");
 
     self->clipboard =
         gtk_clipboard_get_default(gdk_display_get_default());
@@ -123,7 +137,7 @@ static void wintc_sh_fs_clipboard_get_property(
         case PROP_CAN_PASTE:
             g_value_set_boolean(
                 value,
-                fs_clipboard->preferred_target != GDK_NONE
+                !!(fs_clipboard->list_uris)
             );
             break;
 
@@ -165,12 +179,12 @@ WinTCShFSClipboard* wintc_sh_fs_clipboard_new(void)
 
 gboolean wintc_sh_fs_clipboard_paste(
     WinTCShFSClipboard* fs_clipboard,
-    WINTC_UNUSED(const gchar* dest),
+    const gchar*        dest,
     GtkWindow*          wnd,
     GError**            error
 )
 {
-    if (fs_clipboard->preferred_target == GDK_NONE)
+    if (!(fs_clipboard->list_uris))
     {
         g_set_error(
             error,
@@ -183,53 +197,92 @@ gboolean wintc_sh_fs_clipboard_paste(
         return FALSE;
     }
 
-    // Retrieve the contents on the clipboard
+    // Attempt to paste these files
     //
-    GtkSelectionData* selection_data =
-        gtk_clipboard_wait_for_contents(
-            fs_clipboard->clipboard,
-            fs_clipboard->preferred_target
+    WinTCShFSOperation* fs_operation =
+        wintc_sh_fs_operation_new(
+            fs_clipboard->list_uris,
+            dest,
+            fs_clipboard->operation_kind
         );
 
-    if (!selection_data)
+    wintc_sh_fs_operation_do(
+        fs_operation,
+        wnd
+    );
+
+    return TRUE;
+}
+
+//
+// PRIVATE FUNCTIONS
+//
+static void wintc_sh_fs_clipboard_update_state(
+    WinTCShFSClipboard* fs_clipboard
+)
+{
+    fs_clipboard->operation_kind   = WINTC_SH_FS_OPERATION_INVALID;
+    fs_clipboard->preferred_target = GDK_NONE;
+
+    if (fs_clipboard->list_uris)
     {
-        g_set_error(
-            error,
-            wintc_shell_error_quark(),
-            WINTC_SHELL_ERROR_CLIPBOARD_GET_FAILED,
-            "%s",
-            "Failed to retrieve data on the clipboard." // FIXME: Localise
+        g_clear_list(
+            &(fs_clipboard->list_uris),
+            (GDestroyNotify) g_free
         );
-
-        return FALSE;
     }
+
+    g_object_notify(
+        G_OBJECT(fs_clipboard),
+        "can-paste"
+    );
+
+    gtk_clipboard_request_targets(
+        fs_clipboard->clipboard,
+        cb_clipboard_targets_received,
+        fs_clipboard
+    );
+}
+
+//
+// CALLBACKS
+//
+static void cb_clipboard_contents_received(
+    WINTC_UNUSED(GtkClipboard* clipboard),
+    GtkSelectionData* selection_data,
+    gpointer          user_data
+)
+{
+    WinTCShFSClipboard* fs_clipboard = WINTC_SH_FS_CLIPBOARD(user_data);
 
     // Parse the contents
     //
     const guchar* data;
     const guchar* data_end;
     gint          len         = 0;
-    gboolean      should_copy = TRUE;
-    GList*        uris        = NULL;
 
-    data =
-        gtk_selection_data_get_data_with_length(
-            selection_data,
-            &len
-        );
-
+    data     = gtk_selection_data_get_data_with_length(
+                   selection_data,
+                   &len
+               );
     data_end = data + len;
+
+    if (len < 0) // No data on clipboard
+    {
+        WINTC_LOG_DEBUG("shell: fsclipbd - apparently the contents are empty");
+        return;
+    }
 
     if (fs_clipboard->preferred_target == S_ATOM_X_SPECIAL_GNOME_COPIED_FILES)
     {
         if (g_ascii_strncasecmp((const gchar*) data, "copy\n", 5) == 0)
         {
-            should_copy = TRUE;
+            fs_clipboard->operation_kind = WINTC_SH_FS_OPERATION_COPY;
             data += 5;
         }
         else if (g_ascii_strncasecmp((const gchar*) data, "cut\n", 4) == 0)
         {
-            should_copy = FALSE;
+            fs_clipboard->operation_kind = WINTC_SH_FS_OPERATION_MOVE;
             data += 4;
         }
     }
@@ -261,76 +314,12 @@ gboolean wintc_sh_fs_clipboard_paste(
         memcpy(buf, data, copy_len);
         buf[copy_len] = 0;
 
-        uris = g_list_append(uris, buf);
+        fs_clipboard->list_uris =
+            g_list_append(fs_clipboard->list_uris, buf);
 
         // Iter
         //
         data = next_lf + 1;
-    }
-
-    // Attempt to paste these files
-    //
-    WinTCShFSOperation* fs_operation =
-        wintc_sh_fs_operation_new(
-            uris,
-            dest,
-            should_copy ?
-                WINTC_SH_FS_OPERATION_COPY :
-                WINTC_SH_FS_OPERATION_MOVE
-        );
-
-    wintc_sh_fs_operation_do(
-        fs_operation,
-        wnd
-    );
-
-    // FIXME: Attach to signal for file copy completion to clean up
-    //g_list_free_full(uris, (GDestroyNotify) g_free);
-    gtk_selection_data_free(selection_data);
-
-    return TRUE;
-}
-
-//
-// PRIVATE FUNCTIONS
-//
-static void wintc_sh_fs_clipboard_update_state(
-    WinTCShFSClipboard* fs_clipboard
-)
-{
-    fs_clipboard->preferred_target = GDK_NONE;
-
-    if (
-        gtk_clipboard_wait_is_target_available(
-            fs_clipboard->clipboard,
-            S_ATOM_X_SPECIAL_GNOME_COPIED_FILES
-        )
-    )
-    {
-        fs_clipboard->preferred_target = S_ATOM_X_SPECIAL_GNOME_COPIED_FILES;
-
-        WINTC_LOG_DEBUG(
-            "shell: fsclipbd - has data: x-special/gnome-copied-files"
-        );
-    }
-    else if (
-        gtk_clipboard_wait_is_target_available(
-            fs_clipboard->clipboard,
-            S_ATOM_TEXT_URI_LIST
-        )
-    )
-    {
-        fs_clipboard->preferred_target = S_ATOM_TEXT_URI_LIST;
-
-        WINTC_LOG_DEBUG(
-            "shell: fsclipbd - has data: text/uri-list"
-        );
-    }
-    else
-    {
-        WINTC_LOG_DEBUG(
-            "shell: fsclipbd - has data: no"
-        );
     }
 
     g_object_notify(
@@ -339,9 +328,58 @@ static void wintc_sh_fs_clipboard_update_state(
     );
 }
 
-//
-// CALLBACKS
-//
+static void cb_clipboard_targets_received(
+    GtkClipboard* clipboard,
+    GdkAtom*      atoms,
+    gint          n_atoms,
+    gpointer      user_data
+)
+{
+#define K_N_ATOMS_SEARCH 2
+
+    static GdkAtom s_atoms_prioritised[K_N_ATOMS_SEARCH];
+
+    if (s_atoms_prioritised[0] == GDK_NONE)
+    {
+        s_atoms_prioritised[0] = S_ATOM_X_SPECIAL_GNOME_COPIED_FILES;
+        s_atoms_prioritised[1] = S_ATOM_TEXT_URI_LIST;
+    }
+
+    // Look for the atoms
+    //
+    WinTCShFSClipboard* fs_clipboard = WINTC_SH_FS_CLIPBOARD(user_data);
+
+    for (gint i = 0; i < K_N_ATOMS_SEARCH; i++)
+    {
+        GdkAtom lookfor = s_atoms_prioritised[i];
+
+        for (gint j = 0; j < n_atoms; j++)
+        {
+            GdkAtom lookat = atoms[j];
+
+            if (lookat == lookfor)
+            {
+                fs_clipboard->preferred_target = lookfor;
+                goto doneloop;
+            }
+        }
+    }
+
+doneloop:
+    if (fs_clipboard->preferred_target == GDK_NONE)
+    {
+        WINTC_LOG_DEBUG("shell: fsclipbd - no supported formats");
+        return;
+    }
+
+    gtk_clipboard_request_contents(
+        clipboard,
+        fs_clipboard->preferred_target,
+        cb_clipboard_contents_received,
+        fs_clipboard
+    );
+}
+
 static void on_clipboard_owner_change(
     WINTC_UNUSED(GtkClipboard* self),
     WINTC_UNUSED(GdkEventOwnerChange* event),
