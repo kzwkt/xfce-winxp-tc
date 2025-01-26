@@ -1,8 +1,11 @@
 #include <glib.h>
 #include <wintc/comctl.h>
 #include <wintc/comgtk.h>
+#include <wintc/shlang.h>
 
 #include "../public/fsop.h"
+
+#define K_TIMEOUT_SHOW_UI 1
 
 //
 // PRIVATE ENUMS
@@ -56,6 +59,9 @@ static void cb_async_file_op(
     GAsyncResult* res,
     gpointer      data
 );
+static gboolean cb_timeout_show_ui(
+    gpointer user_data
+);
 
 //
 // GTK OOP CLASS/INSTANCE DEFINITIONS
@@ -69,6 +75,7 @@ typedef struct _WinTCShFSOperation
     gchar*                 dest;
     GFile*                 dest_file;
     gboolean               done;
+    guint                  id_timeout_show_ui;
     GList*                 iter_op;
     GList*                 list_files;
     WinTCShFSOperationKind operation_kind;
@@ -79,6 +86,12 @@ typedef struct _WinTCShFSOperation
     GtkWidget* label_eta;
     GtkWidget* label_filename;
     GtkWidget* label_locations;
+    GtkWidget* prg_copymove;
+
+    // Track the current top most window, either the owner window (eg.
+    // explorer) or the progress window, if it's visible
+    //
+    GtkWidget* wnd_topmost;
 } WinTCShFSOperation;
 
 //
@@ -189,7 +202,8 @@ static void wintc_sh_fs_operation_dispose(
 {
     WinTCShFSOperation* fs_operation = WINTC_SH_FS_OPERATION(object);
 
-    g_object_unref(fs_operation->dest_file);
+    g_clear_object(&(fs_operation->dest_file));
+    g_clear_object(&(fs_operation->wnd_progress));
 
     (G_OBJECT_CLASS(wintc_sh_fs_operation_parent_class))->dispose(object);
 }
@@ -289,12 +303,18 @@ WinTCShFSOperation* wintc_sh_fs_operation_new(
 
 void wintc_sh_fs_operation_do(
     WinTCShFSOperation* fs_operation,
-    WINTC_UNUSED(GtkWindow* wnd)
+    GtkWindow*          wnd
 )
 {
     if (fs_operation->operation_kind == WINTC_SH_FS_OPERATION_INVALID)
     {
         g_critical("%s", "shell: fs op: invalid operation");
+        return;
+    }
+
+    if (fs_operation->iter_op)
+    {
+        g_critical("%s", "shell fs op: operation already in progress");
         return;
     }
 
@@ -304,11 +324,19 @@ void wintc_sh_fs_operation_do(
         return;
     }
 
+    // Spawn timeout for UI
+    //
+    fs_operation->id_timeout_show_ui =
+        g_timeout_add_seconds(
+            K_TIMEOUT_SHOW_UI,
+            (GSourceFunc) cb_timeout_show_ui,
+            fs_operation
+        );
+
     // Set up the operation for stepping
     //
-    // TODO: Set up timer before display UI for long running ops
-    //
-    fs_operation->iter_op = fs_operation->list_files;
+    fs_operation->iter_op     = fs_operation->list_files;
+    fs_operation->wnd_topmost = GTK_WIDGET(wnd);
 
     wintc_sh_fs_operation_step(fs_operation);
 }
@@ -514,8 +542,79 @@ static void cb_async_file_op(
     if (!(fs_operation->iter_op))
     {
         fs_operation->done = TRUE;
+
+        if (fs_operation->id_timeout_show_ui)
+        {
+            g_source_remove(fs_operation->id_timeout_show_ui);
+            fs_operation->id_timeout_show_ui = 0;
+        }
+
+        if (fs_operation->wnd_progress)
+        {
+            gtk_widget_hide(fs_operation->wnd_progress);
+        }
+
         return;
     }
 
     wintc_sh_fs_operation_step(fs_operation);
+}
+
+static gboolean cb_timeout_show_ui(
+    gpointer user_data
+)
+{
+    WinTCShFSOperation* fs_operation = WINTC_SH_FS_OPERATION(user_data);
+
+    GtkBuilder* builder =
+        gtk_builder_new_from_resource(
+            "/uk/oddmatics/wintc/shell/dlgfsop.ui"
+        );
+
+    wintc_ctl_install_default_styles();
+    wintc_lc_builder_preprocess_widget_text(builder);
+
+    wintc_builder_get_objects(
+        builder,
+        "main-wnd",        &(fs_operation->wnd_progress),
+        "label-eta",       &(fs_operation->label_eta),
+        "label-filename",  &(fs_operation->label_filename),
+        "label-locations", &(fs_operation->label_locations),
+        "prg-copymove",    &(fs_operation->prg_copymove),
+        NULL
+    );
+
+    g_object_ref(fs_operation->wnd_progress);
+
+    g_object_unref(builder);
+
+    // Set up window
+    //
+    GApplication* app = g_application_get_default();
+
+    if (app)
+    {
+        gtk_window_set_application(
+            GTK_WINDOW(fs_operation->wnd_progress),
+            GTK_APPLICATION(app)
+        );
+    }
+
+    gtk_window_set_modal(
+        GTK_WINDOW(fs_operation->wnd_progress),
+        TRUE
+    );
+    gtk_window_set_transient_for(
+        GTK_WINDOW(fs_operation->wnd_progress),
+        GTK_WINDOW(fs_operation->wnd_topmost)
+    );
+
+    gtk_widget_show_all(
+        fs_operation->wnd_progress
+    );
+
+    fs_operation->id_timeout_show_ui = 0;
+    fs_operation->wnd_topmost        = fs_operation->wnd_progress;
+
+    return G_SOURCE_REMOVE;
 }
