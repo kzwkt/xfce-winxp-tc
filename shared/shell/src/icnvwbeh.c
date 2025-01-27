@@ -537,6 +537,9 @@ static void action_view_operation(
     WinTCIShextView*     view         = wintc_sh_browser_get_current_view(
                                             behaviour->browser
                                         );
+    GtkWindow*           wnd          = wintc_widget_get_toplevel_window(
+                                            behaviour->icon_view
+                                        );
 
     operation =
         wintc_ishext_view_spawn_operation(
@@ -548,23 +551,18 @@ static void action_view_operation(
 
     if (!operation)
     {
-        wintc_display_error_and_clear(&error);
+        wintc_display_error_and_clear(
+            &error,
+            wnd
+        );
         return;
     }
 
     // Execute!
     //
-    GtkWidget* toplevel = gtk_widget_get_toplevel(behaviour->icon_view);
-    GtkWindow* wnd      = NULL;
-
-    if (GTK_IS_WINDOW(toplevel))
-    {
-        wnd = GTK_WINDOW(toplevel);
-    }
-
     if (!(operation->func) (view, operation, wnd, &error))
     {
-        wintc_display_error_and_clear(&error);
+        wintc_display_error_and_clear(&error, wnd);
     }
 
     g_free(operation);
@@ -764,7 +762,10 @@ static void on_icon_view_item_activated(
 
         if (error)
         {
-            wintc_display_error_and_clear(&error);
+            wintc_display_error_and_clear(
+                &error,
+                wintc_widget_get_toplevel_window(GTK_WIDGET(self))
+            );
         }
     }
 }

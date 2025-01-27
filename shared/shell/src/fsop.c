@@ -517,7 +517,7 @@ static void cb_async_file_op(
 
         default:
             g_critical("%s", "shell: fs op - impossible finish situation?");
-            break;
+            return;
     }
 
     if (!success)
@@ -532,7 +532,10 @@ static void cb_async_file_op(
         //        etc. - see copy/move/trash GLib documentation for what needs
         //        to be handled
         //
-        wintc_display_error_and_clear(&error);
+        wintc_display_error_and_clear(
+            &error,
+            GTK_WINDOW(fs_operation->wnd_topmost)
+        );
     }
 
     // Proceed to next step
