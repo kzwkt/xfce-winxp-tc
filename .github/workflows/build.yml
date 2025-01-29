@@ -17,7 +17,7 @@ jobs:
       - name: Set dynamic tag version
         run: |
           # Generate a dynamic tag using commit SHA or other unique identifier
-          VERSION="v$(date +'%Y%m%d%H%M%S')-${GITHUB_SHA:0:7}"  # Format: vYYYYMMDDHHMMSS-<commit SHA>
+          VERSION="v$(date +'%Y%m%d%H%M%S')"  # Format: vYYYYMMDDHHMMSS-<commit SHA>
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           
       - uses: softprops/action-gh-release@v2
