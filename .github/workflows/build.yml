@@ -13,9 +13,7 @@ jobs:
              apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
              gem install sass
              ./buildall.sh
-             echo "dirr=$(pwd)" >> $GITHUB_ENV
-             zip -r $dirr/$xptc-debian.zip $dirr/xptc/
-
+             zip -r xptc-debian.zip xptc
       - name: Set dynamic tag version
         run: |
           # Generate a dynamic tag using commit SHA or other unique identifier
@@ -28,7 +26,7 @@ jobs:
           name: "Release ${{ env.VERSION }}"
           body: "This release includes the latest build for xfce-winxp-tc ."
           files: |
-            $dirr/xptc-debian.zip
+            xptc-debian.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
              
