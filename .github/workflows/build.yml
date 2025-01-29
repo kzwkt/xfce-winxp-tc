@@ -28,7 +28,7 @@ jobs:
           name: "Release ${{ env.VERSION }}"
           body: "This release includes the latest build for xfce-winxp-tc ."
           files: |
-            FILES
+            ${{ env.FILES }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
              
