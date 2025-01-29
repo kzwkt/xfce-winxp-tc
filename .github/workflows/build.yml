@@ -1,0 +1,36 @@
+name: Install
+on: [push]
+jobs:
+  debian:
+    runs-on: ubuntu-latest
+    container: debian:stable
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup
+        run: |
+             apt-get update && apt-get install -y ca-certificates fakeroot
+             apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
+             gem install sass
+             cd packaging
+             ./buildall.sh
+             zip -r ${{ github.workspace }}/xptc.zip xptc
+
+      - name: Set dynamic tag version
+        run: |
+          # Generate a dynamic tag using commit SHA or other unique identifier
+          VERSION="v$(date +'%Y%m%d%H%M%S')-${GITHUB_SHA:0:7}"  # Format: vYYYYMMDDHHMMSS-<commit SHA>
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: "Release ${{ env.VERSION }}"
+          body: "This release includes the latest build for xfce-winxp-tc ."
+          files: |
+            ${{ github.workspace }}/xptc.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+             
+
+
+            
