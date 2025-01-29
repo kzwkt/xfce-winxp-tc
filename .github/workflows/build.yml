@@ -9,9 +9,9 @@ jobs:
       - name: Setup
         run: |
              apt-get update && apt-get install -y ca-certificates fakeroot
+             cd packaging
              apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
              gem install sass
-             cd packaging
              ./buildall.sh
              zip -r ${{ github.workspace }}/xptc.zip xptc
 
