@@ -1,7 +1,6 @@
-ename: Install
+name: Install
 on: 
-  -  [push]
-  -  workflow_dispatch
+   workflow_dispatch:
 jobs:
   debian:
     runs-on: ubuntu-latest
