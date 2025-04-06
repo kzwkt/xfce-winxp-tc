@@ -1,5 +1,7 @@
 name: Install
-on: [push]
+on: 
+  -  [push]
+  -  workflow_dispatch
 jobs:
   debian:
     runs-on: ubuntu-latest
