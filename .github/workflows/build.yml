@@ -11,9 +11,9 @@ jobs:
              sudo apt-get update 
              sudo apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
              cd packaging
-             sudo apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
-             sudo gem install sass -t deb
-             ./buildall.sh
+             sudo apt install -y $(./chkdeps.sh -t deb -l | cut -d':' -f2 | tr '\n' ' ')
+             sudo gem install sass 
+              ./buildall.sh
              zip -r xptc-debian.zip xptc
              upload=$(realpath xptc-debian.zip)
              echo "FILES=${upload}" >> $GITHUB_ENV
