@@ -8,9 +8,8 @@ jobs:
       - uses: actions/checkout@v2
       - name: Setup
         run: |
-           
-              sudo apt-get update 
-              sudo apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
+             sudo apt-get update 
+             sudo apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
              cd packaging
              sudo apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
              sudo gem install sass
