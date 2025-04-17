@@ -5,9 +5,45 @@
 
 #include <glib.h>
 
+/**
+ * @def WINTC_STR_TRANSFORM(strvar, strfn)
+ *
+ * Convenience macro for doing an ASCII transformation in place, use this macro
+ * for things like WINTC_STR_TRANSFORM(my_string, g_ascii_tolower).
+ */
+#define WINTC_STR_TRANSFORM(strvar, strfn) \
+{ \
+    gchar* wstrtmp = strfn(strvar); \
+    g_free(strvar); \
+    strvar = wstrtmp; \
+}
+
+/**
+ * @def WINTC_UTF8_TRANSFORM(strvar, strfn)
+ *
+ * Convenience macro for doing a UTF-8 transformation in place, use this macro
+ * for things like WINTC_UTF8_TRANSFORM(my_string, g_utf8_casefold).
+ */
+#define WINTC_UTF8_TRANSFORM(strvar, strfn) \
+{ \
+    gchar* wstrtmp = strfn(strvar, -1); \
+    g_free(strvar); \
+    strvar = wstrtmp; \
+}
+
 //
 // PUBLIC FUNCTIONS
 //
+
+/**
+ * Gets the last component of a path.
+ *
+ * @param path The path.
+ * @return A pointer to the last component of the path.
+ */
+const gchar* wintc_basename(
+    const gchar* path
+);
 
 /**
  * Copies a string, ensuring it has the specified prefix.
@@ -31,6 +67,24 @@ gchar* wintc_str_set_prefix(
 gchar* wintc_str_set_suffix(
     const gchar* str,
     const gchar* suffix
+);
+
+/**
+ * Duplicates part of a string from the start and ending at the first
+ * occurrence of the specified delimiter (exclusive, so the delimiter will not
+ * be included).
+ *
+ * @param str The string.
+ * @param len The maximum length of str to use, -1 for null terminated string.
+ * @param c   The character to look for.
+ * @param pos If not NULL, a storage location for position after the delimiter.
+ * @return The new string, a complete copy of the string if c wasn't found.
+ */
+gchar* wintc_strdup_nextchr(
+    const gchar*  str,
+    gssize        len,
+    gunichar      c,
+    const gchar** pos
 );
 
 /**
@@ -92,6 +146,18 @@ gchar* wintc_strsubst(
  */
 guint wintc_strv_length(
     const gchar** str_array
+);
+
+/**
+ * Extracts a substring from one string to create a new string.
+ *
+ * @param start A pointer to the start of the substring.
+ * @param end   A pointer to the end of the substring.
+ * @return A copy of the substring.
+ */
+gchar* wintc_substr(
+    const gchar* start,
+    const gchar* end
 );
 
 #endif

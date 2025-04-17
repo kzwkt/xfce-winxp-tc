@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 #include <pwd.h>
 #include <sys/types.h>
+#include <wintc/comctl.h>
 #include <wintc/comgtk.h>
 #include <wintc/exec.h>
 #include <wintc/shelldpa.h>
@@ -13,6 +14,7 @@
 #include "../toolbar.h"
 #include "menumod.h"
 #include "personal.h"
+#include "progmenu.h"
 #include "shared.h"
 #include "toolbar.h"
 #include "util.h"
@@ -253,15 +255,12 @@ void create_personal_menu(
 
     // Attach All Programs submenu
     //
-    GarconMenu* programs_menu    = garcon_menu_new_for_path(
-                                       WINTC_ASSETS_DIR
-                                       "/shell-res/applications.menu"
-                                   );
-    GtkWidget*  programs_submenu = garcon_gtk_menu_new(programs_menu);
-
     gtk_menu_item_set_submenu(
         GTK_MENU_ITEM(toolbar_start->personal.menuitem_all_programs),
-        programs_submenu
+        wintc_toolbar_start_progmenu_new_gtk_menu(
+            toolbar_start->progmenu,
+            &(toolbar_start->personal.all_programs_binding)
+        )
     );
 
     // Transfer to popup
@@ -390,6 +389,12 @@ void destroy_personal_menu(
     );
     g_object_unref(
         g_steal_pointer(&(toolbar_start->personal.separator_all_programs))
+    );
+
+    // Clear all programs menu model binding object
+    //
+    g_clear_object(
+        &(toolbar_start->personal.all_programs_binding)
     );
 
     // Clear signal tuple data
@@ -845,6 +850,9 @@ static void refresh_personal_menu(
             _("E-mail")
         )
     );
+
+    g_object_unref(entry_internet);
+    g_object_unref(entry_email);
 
     // Add separator between defaults & MFU
     //

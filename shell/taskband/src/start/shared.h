@@ -1,6 +1,12 @@
 #ifndef __SHARED_START_H__
 #define __SHARED_START_H__
 
+#include <glib.h>
+#include <gtk/gtk.h>
+#include <wintc/comctl.h>
+
+#include "progmenu.h"
+
 //
 // INTERNAL STRUCTS
 //
@@ -17,6 +23,8 @@ typedef struct _PersonalStartMenuData
     GtkWidget* menubar_programs;
     GtkWidget* menuitem_all_programs;
     GtkWidget* separator_all_programs;
+
+    WinTCCtlMenuBinding* all_programs_binding;
 
     // UI state
     //
@@ -44,6 +52,8 @@ typedef struct _WinTCToolbarStart
     // Personal data struct
     //
     PersonalStartMenuData personal;
+
+    WinTCToolbarStartProgmenu* progmenu;
 
     // UI state
     //
