@@ -4,15 +4,14 @@ on:
 jobs:
   debian:
     runs-on: ubuntu-latest
-    container: debian:stable
     steps:
       - uses: actions/checkout@v2
       - name: Setup
         run: |
-             apt-get update && apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
+            sudo  apt-get update && apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
              cd packaging
-             apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
-             gem install sass
+             sudo apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
+             sudo gem install sass
              ./buildall.sh
              zip -r xptc-debian.zip xptc
              upload=$(realpath xptc-debian.zip)
@@ -20,7 +19,7 @@ jobs:
           
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: latest-ubuntu
           name: latest build
           body: "This release includes the latest build for xfce-winxp-tc ."
           files: |
