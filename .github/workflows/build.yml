@@ -12,7 +12,7 @@ jobs:
              sudo apt-get install -y ca-certificates fakeroot build-essential python3 cmake pkg-config zip
              cd packaging
              sudo apt install -y $(./chkdeps.sh -l | cut -d':' -f2 | tr '\n' ' ')
-             sudo gem install sass
+             sudo gem install sass -t deb
              ./buildall.sh
              zip -r xptc-debian.zip xptc
              upload=$(realpath xptc-debian.zip)
