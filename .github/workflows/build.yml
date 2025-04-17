@@ -13,7 +13,7 @@ jobs:
              cd packaging
              sudo apt install -y $(./chkdeps.sh -t deb -l | cut -d':' -f2 | tr '\n' ' ')
              sudo gem install sass 
-              ./buildall.sh
+              ./buildall.sh -t deb
              zip -r xptc-debian.zip xptc
              upload=$(realpath xptc-debian.zip)
              echo "FILES=${upload}" >> $GITHUB_ENV
